@@ -53,17 +53,29 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
     const pandora::PfoList *pPandoraPfoList = NULL;
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(m_pandora, pPandoraPfoList));
 
-    IMPL::LCCollectionVec *pClusterCollection = new IMPL::LCCollectionVec(LCIO::CLUSTER);
+    const bool writeUncalibratedClusters(!m_settings.m_uncalibratedClusterCollectionName.empty());
+
+    IMPL::LCCollectionVec *pCalibratedClusterCollection = new IMPL::LCCollectionVec(LCIO::CLUSTER);
+    IMPL::LCCollectionVec *pUncalibratedClusterCollection = writeUncalibratedClusters ? new IMPL::LCCollectionVec(LCIO::CLUSTER) : NULL;
     IMPL::LCCollectionVec *pReconstructedParticleCollection = new IMPL::LCCollectionVec(LCIO::RECONSTRUCTEDPARTICLE);
     IMPL::LCCollectionVec *pStartVertexCollection = new IMPL::LCCollectionVec(LCIO::VERTEX);
 
-    IMPL::LCFlagImpl lcFlagImpl(pClusterCollection->getFlag());
+    IMPL::LCFlagImpl lcFlagImpl(pCalibratedClusterCollection->getFlag());
     lcFlagImpl.setBit(LCIO::CLBIT_HITS);
-    pClusterCollection->setFlag(lcFlagImpl.getFlag());
+    pCalibratedClusterCollection->setFlag(lcFlagImpl.getFlag());
+
+    if (writeUncalibratedClusters)
+    {
+        IMPL::LCFlagImpl rawLcFlagImpl(pUncalibratedClusterCollection->getFlag());
+        rawLcFlagImpl.setBit(LCIO::CLBIT_HITS);
+        pUncalibratedClusterCollection->setFlag(rawLcFlagImpl.getFlag());
+    }
 
     pandora::StringVector subDetectorNames;
     this->InitialiseSubDetectorNames(subDetectorNames);
-    pClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
+    pCalibratedClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
+    if (writeUncalibratedClusters)
+        pUncalibratedClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
 
     // Create lcio "reconstructed particles" from the pandora "particle flow objects"
     for (pandora::PfoList::const_iterator pIter = pPandoraPfoList->begin(), pIterEnd = pPandoraPfoList->end(); pIter != pIterEnd; ++pIter)
@@ -83,25 +95,40 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
             pPandoraCluster->GetOrderedCaloHitList().FillCaloHitList(pandoraCaloHitList);
             pandoraCaloHitList.insert(pandoraCaloHitList.end(), pPandoraCluster->GetIsolatedCaloHitList().begin(), pPandoraCluster->GetIsolatedCaloHitList().end());
 
-            pandora::FloatVector hitE, hitX, hitY, hitZ;
-            IMPL::ClusterImpl *const pLcioCluster(new ClusterImpl());
-            this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioCluster, pandoraCaloHitList, hitE, hitX, hitY, hitZ);
+            pandora::FloatVector hitECal, hitXCal, hitYCal, hitZCal;
+            IMPL::ClusterImpl *const pLcioCalibratedCluster(new ClusterImpl());
+            this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioCalibratedCluster, pandoraCaloHitList, hitECal, hitXCal, hitYCal, hitZCal);
 
-            float clusterCorrectEnergy(0.f);
-            this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioCluster, clusterCorrectEnergy);
+            float clusterCalibratedEnergy(0.f);
+            this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioCalibratedCluster, clusterCalibratedEnergy, true);
 
             pandora::CartesianVector clusterPosition(0.f, 0.f, 0.f);
             const unsigned int nHitsInCluster(pandoraCaloHitList.size());
-            this->SetClusterPositionAndError(nHitsInCluster, hitE, hitX, hitY, hitZ, pLcioCluster, clusterPosition);
+            this->SetClusterPositionAndError(nHitsInCluster, hitECal, hitXCal, hitYCal, hitZCal, pLcioCalibratedCluster, clusterPosition);
 
             if (!hasTrack)
             {
-                clustersWeightedPosition += clusterPosition * clusterCorrectEnergy;
-                clustersTotalEnergy += clusterCorrectEnergy;
+                clustersWeightedPosition += clusterPosition * clusterCalibratedEnergy;
+                clustersTotalEnergy += clusterCalibratedEnergy;
             }
 
-            pClusterCollection->addElement(pLcioCluster);
-            pReconstructedParticle->addCluster(pLcioCluster);
+            if (writeUncalibratedClusters)
+            {
+                pandora::FloatVector hitERaw, hitXRaw, hitYRaw, hitZRaw;
+                IMPL::ClusterImpl *const pLcioUncalibratedCluster(new ClusterImpl());
+                this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioUncalibratedCluster, pandoraCaloHitList, hitERaw, hitXRaw, hitYRaw, hitZRaw);
+
+                float clusterUncalibratedEnergy(0.f);
+                this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioUncalibratedCluster, clusterUncalibratedEnergy, false);
+
+                pandora::CartesianVector rawClusterPosition(0.f, 0.f, 0.f);
+                this->SetClusterPositionAndError(nHitsInCluster, hitERaw, hitXRaw, hitYRaw, hitZRaw, pLcioUncalibratedCluster, rawClusterPosition);
+
+                pUncalibratedClusterCollection->addElement(pLcioUncalibratedCluster);
+            }
+
+            pCalibratedClusterCollection->addElement(pLcioCalibratedCluster);
+            pReconstructedParticle->addCluster(pLcioCalibratedCluster);
         }
 
         if (!hasTrack)
@@ -133,7 +160,9 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
         pStartVertexCollection->addElement(pStartVertex);
     }
 
-    pLCEvent->addCollection(pClusterCollection, m_settings.m_clusterCollectionName.c_str());
+    pLCEvent->addCollection(pCalibratedClusterCollection, m_settings.m_clusterCollectionName.c_str());
+    if (writeUncalibratedClusters)
+        pLCEvent->addCollection(pUncalibratedClusterCollection, m_settings.m_uncalibratedClusterCollectionName.c_str());
     pLCEvent->addCollection(pReconstructedParticleCollection, m_settings.m_pfoCollectionName.c_str());
     pLCEvent->addCollection(pStartVertexCollection, m_settings.m_startVertexCollectionName.c_str());
 
@@ -188,20 +217,27 @@ void DDPfoCreator::SetClusterSubDetectorEnergies(const pandora::StringVector &su
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DDPfoCreator::SetClusterEnergyAndError(const pandora::ParticleFlowObject *const pPandoraPfo, const pandora::Cluster *const pPandoraCluster, 
-    IMPL::ClusterImpl *const pLcioCluster, float &clusterCorrectEnergy) const
+void DDPfoCreator::SetClusterEnergyAndError(const pandora::ParticleFlowObject *const pPandoraPfo, const pandora::Cluster *const pPandoraCluster,
+    IMPL::ClusterImpl *const pLcioCluster, float &clusterEnergy, const bool useCorrectedEnergy) const
 {
     const bool isEmShower((pandora::PHOTON == pPandoraPfo->GetParticleId()) || (pandora::E_MINUS == std::abs(pPandoraPfo->GetParticleId())));
-    clusterCorrectEnergy = (isEmShower ? pPandoraCluster->GetCorrectedElectromagneticEnergy(m_pandora) : pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora));
+    if (useCorrectedEnergy)
+    {
+        clusterEnergy = (isEmShower ? pPandoraCluster->GetCorrectedElectromagneticEnergy(m_pandora) : pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora));
+    }
+    else
+    {
+        clusterEnergy = (isEmShower ? pPandoraCluster->GetElectromagneticEnergy() : pPandoraCluster->GetHadronicEnergy());
+    }
 
-    if (clusterCorrectEnergy < std::numeric_limits<float>::epsilon())
+    if (clusterEnergy < std::numeric_limits<float>::epsilon())
         throw pandora::StatusCodeException(pandora::STATUS_CODE_FAILURE);
 
     const float stochasticTerm(isEmShower ? m_settings.m_emStochasticTerm : m_settings.m_hadStochasticTerm); 
     const float constantTerm(isEmShower ? m_settings.m_emConstantTerm : m_settings.m_hadConstantTerm);
-    const float energyError(std::sqrt(stochasticTerm * stochasticTerm / clusterCorrectEnergy + constantTerm * constantTerm) * clusterCorrectEnergy);
+    const float energyError(std::sqrt(stochasticTerm * stochasticTerm / clusterEnergy + constantTerm * constantTerm) * clusterEnergy);
 
-    pLcioCluster->setEnergy(clusterCorrectEnergy);
+    pLcioCluster->setEnergy(clusterEnergy);
     pLcioCluster->setEnergyError(energyError);
 }
 
@@ -419,6 +455,7 @@ void DDPfoCreator::SetRecoParticlePropertiesFromPFO(const pandora::ParticleFlowO
 
 DDPfoCreator::Settings::Settings():
     m_clusterCollectionName(""),
+    m_uncalibratedClusterCollectionName(""),
     m_pfoCollectionName(""),
     m_startVertexCollectionName(""),
     m_startVertexAlgName(""),

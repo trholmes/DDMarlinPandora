@@ -474,9 +474,15 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
     // Name of PFO collection written by MarlinPandora
     registerOutputCollection(LCIO::CLUSTER,
                              "ClusterCollectionName",
-                             "Cluster Collection Name",
+                             "Calibrated cluster collection name",
                              m_pfoCreatorSettings.m_clusterCollectionName,
                              std::string("PandoraPFANewClusters"));
+
+    registerOutputCollection(LCIO::CLUSTER,
+                             "UncalibratedClusterCollectionName",
+                             "Optional uncalibrated cluster collection name (empty disables output)",
+                             m_pfoCreatorSettings.m_uncalibratedClusterCollectionName,
+                             std::string(""));
 
     registerOutputCollection(LCIO::RECONSTRUCTEDPARTICLE,
                              "PFOCollectionName",

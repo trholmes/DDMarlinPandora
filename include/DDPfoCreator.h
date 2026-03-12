@@ -27,6 +27,7 @@ public:
         Settings();
 
         std::string     m_clusterCollectionName = "";            ///< The name of the cluster output collection
+        std::string     m_uncalibratedClusterCollectionName = "";///< Optional name of additional uncalibrated cluster output collection
         std::string     m_pfoCollectionName = "";                ///< The name of the pfo output collection
         std::string     m_startVertexCollectionName = "";        ///< The name of the start vertex output collection
         std::string     m_startVertexAlgName = "";               ///< The name of the algorithm to fill the start vertex output collection
@@ -100,8 +101,8 @@ private:
      *  @param  pLcioCluster the address of the lcio cluster to be set energies and erros
      *  @param  clusterCorrectEnergy a number to receive the cluster correct energy
      */
-    void SetClusterEnergyAndError(const pandora::ParticleFlowObject *const pPandoraPfo, const pandora::Cluster *const pPandoraCluster, 
-        IMPL::ClusterImpl *const pLcioCluster, float &clusterCorrectEnergy) const;
+    void SetClusterEnergyAndError(const pandora::ParticleFlowObject *const pPandoraPfo, const pandora::Cluster *const pPandoraCluster,
+        IMPL::ClusterImpl *const pLcioCluster, float &clusterEnergy, const bool useCorrectedEnergy) const;
 
     /**
      *  @brief  Set cluster position, errors and other shape info, by calculating culster shape first
