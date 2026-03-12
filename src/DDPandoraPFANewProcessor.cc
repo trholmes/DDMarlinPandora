@@ -359,6 +359,18 @@ pandora::StatusCode DDPandoraPFANewProcessor::RegisterUserComponents() const
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
         "NonLinearity", pandora::HADRONIC, m_settings.m_inputEnergyCorrectionPoints, m_settings.m_outputEnergyCorrectionPoints));
 
+    if (m_settings.m_thetaEnergyCorrectionEnabled)
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterThetaEnergyBinnedEnergyCorrection(*m_pPandora,
+            m_settings.m_thetaEnergyCorrectionPluginName,
+            m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionScaleFactors,
+            m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionScaleFactors));
+    }
+
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::RegisterAlgorithmFactory(*m_pPandora,
         "ExternalClustering", new DDExternalClusteringAlgorithm::Factory));
     
