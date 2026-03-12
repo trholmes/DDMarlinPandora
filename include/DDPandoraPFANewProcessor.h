@@ -54,6 +54,15 @@ public:
 
         FloatVector     m_inputEnergyCorrectionPoints{};    ///< The input energy points for non-linearity energy correction
         FloatVector     m_outputEnergyCorrectionPoints{};   ///< The output energy points for non-linearity energy correction
+
+        bool            m_thetaEnergyCorrectionEnabled = false;           ///< Enable theta-energy binned hadronic correction
+        std::string     m_thetaEnergyCorrectionPluginName = "";           ///< Pandora energy correction plugin name to invoke
+        FloatVector     m_eCalThetaEnergyCorrectionThetaBinEdges{};       ///< ECAL theta bin edges
+        FloatVector     m_eCalThetaEnergyCorrectionEnergyBinEdges{};      ///< ECAL energy bin edges
+        FloatVector     m_eCalThetaEnergyCorrectionScaleFactors{};        ///< Flattened ECAL scale factors (row-major theta x energy)
+        FloatVector     m_hCalThetaEnergyCorrectionThetaBinEdges{};       ///< HCAL theta bin edges
+        FloatVector     m_hCalThetaEnergyCorrectionEnergyBinEdges{};      ///< HCAL energy bin edges
+        FloatVector     m_hCalThetaEnergyCorrectionScaleFactors{};        ///< Flattened HCAL scale factors (row-major theta x energy)
         
         // Software compensation parameters
         FloatVector     m_softCompParameters{};

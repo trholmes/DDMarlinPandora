@@ -31,6 +31,52 @@
 
 
 #include <cstdlib>
+#include <stdexcept>
+
+namespace
+{
+bool IsStrictlyIncreasing(const pandora::FloatVector &values)
+{
+    if (values.empty())
+        return true;
+
+    for (std::size_t i = 1; i < values.size(); ++i)
+    {
+        if (!(values.at(i) > values.at(i - 1)))
+            return false;
+    }
+
+    return true;
+}
+
+void ValidateThetaEnergyTable(
+    const std::string &name,
+    const pandora::FloatVector &thetaEdges,
+    const pandora::FloatVector &energyEdges,
+    const pandora::FloatVector &scaleFactors)
+{
+    if (thetaEdges.size() < 2)
+        throw std::runtime_error(name + ": require at least 2 theta bin edges");
+
+    if (energyEdges.size() < 2)
+        throw std::runtime_error(name + ": require at least 2 energy bin edges");
+
+    if (!IsStrictlyIncreasing(thetaEdges))
+        throw std::runtime_error(name + ": theta bin edges must be strictly increasing");
+
+    if (!IsStrictlyIncreasing(energyEdges))
+        throw std::runtime_error(name + ": energy bin edges must be strictly increasing");
+
+    const std::size_t expectedScaleCount = (thetaEdges.size() - 1) * (energyEdges.size() - 1);
+
+    if (scaleFactors.size() != expectedScaleCount)
+    {
+        throw std::runtime_error(
+            name + ": scale factor size mismatch, expected " + std::to_string(expectedScaleCount) +
+            ", got " + std::to_string(scaleFactors.size()));
+    }
+}
+} // namespace
 
 DDPandoraPFANewProcessor aDDPandoraPFANewProcessor;
 
@@ -794,6 +840,46 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
                             "The output energy points for hadronic energy correction",
                             m_settings.m_outputEnergyCorrectionPoints,
                             FloatVector());
+
+    registerProcessorParameter("ThetaEnergyCorrectionEnabled",
+                            "Enable theta-energy binned hadronic correction plugin parameters",
+                            m_settings.m_thetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("ThetaEnergyCorrectionPluginName",
+                            "Pandora hadronic energy correction plugin name for theta-energy calibration",
+                            m_settings.m_thetaEnergyCorrectionPluginName,
+                            std::string(""));
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionThetaBinEdges",
+                            "ECAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionEnergyBinEdges",
+                            "ECAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionScaleFactors",
+                            "ECAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_eCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionThetaBinEdges",
+                            "HCAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionEnergyBinEdges",
+                            "HCAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionScaleFactors",
+                            "HCAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_hCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
     
     
     ///EXTRA PARAMETERS FROM NIKIFOROS
@@ -920,6 +1006,34 @@ void DDPandoraPFANewProcessor::FinaliseSteeringParameters()
     mainDetector.field().magneticField(position,magneticFieldVector); // get the magnetic field vector from DD4hep
     
     m_settings.m_innerBField = magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
+
+    if (m_settings.m_thetaEnergyCorrectionEnabled)
+    {
+        if (m_settings.m_thetaEnergyCorrectionPluginName.empty())
+            throw std::runtime_error("ThetaEnergyCorrectionEnabled=true but ThetaEnergyCorrectionPluginName is empty");
+
+        ValidateThetaEnergyTable(
+            "ECalThetaEnergyCorrection",
+            m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionScaleFactors);
+
+        ValidateThetaEnergyTable(
+            "HCalThetaEnergyCorrection",
+            m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionScaleFactors);
+
+        streamlog_out(MESSAGE) << "DDPandoraPFANewProcessor: loaded theta-energy correction tables for plugin '"
+                               << m_settings.m_thetaEnergyCorrectionPluginName << "'"
+                               << " (ECAL bins: "
+                               << (m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges.size() - 1) << "x"
+                               << (m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges.size() - 1)
+                               << ", HCAL bins: "
+                               << (m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges.size() - 1) << "x"
+                               << (m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges.size() - 1) << ")"
+                               << std::endl;
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -946,6 +1060,8 @@ DDPandoraPFANewProcessor::Settings::Settings() :
     m_muonEndCapBField(0.01f),
     m_inputEnergyCorrectionPoints(0),
     m_outputEnergyCorrectionPoints(0),
+    m_thetaEnergyCorrectionEnabled(false),
+    m_thetaEnergyCorrectionPluginName(""),
     m_trackCreatorName("")
 
 {
