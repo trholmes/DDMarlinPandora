@@ -221,13 +221,20 @@ void DDPfoCreator::SetClusterEnergyAndError(const pandora::ParticleFlowObject *c
     IMPL::ClusterImpl *const pLcioCluster, float &clusterEnergy, const bool useCorrectedEnergy) const
 {
     const bool isEmShower((pandora::PHOTON == pPandoraPfo->GetParticleId()) || (pandora::E_MINUS == std::abs(pPandoraPfo->GetParticleId())));
+    const bool forceHadronicComparison(m_settings.m_forceClusterEnergyComparisonToHadronic &&
+        !m_settings.m_uncalibratedClusterCollectionName.empty());
+
     if (useCorrectedEnergy)
     {
-        clusterEnergy = (isEmShower ? pPandoraCluster->GetCorrectedElectromagneticEnergy(m_pandora) : pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora));
+        clusterEnergy = (forceHadronicComparison ?
+            pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora) :
+            (isEmShower ? pPandoraCluster->GetCorrectedElectromagneticEnergy(m_pandora) : pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora)));
     }
     else
     {
-        clusterEnergy = (isEmShower ? pPandoraCluster->GetElectromagneticEnergy() : pPandoraCluster->GetHadronicEnergy());
+        clusterEnergy = (forceHadronicComparison ?
+            pPandoraCluster->GetHadronicEnergy() :
+            (isEmShower ? pPandoraCluster->GetElectromagneticEnergy() : pPandoraCluster->GetHadronicEnergy()));
     }
 
     if (clusterEnergy < std::numeric_limits<float>::epsilon())
@@ -456,6 +463,7 @@ void DDPfoCreator::SetRecoParticlePropertiesFromPFO(const pandora::ParticleFlowO
 DDPfoCreator::Settings::Settings():
     m_clusterCollectionName(""),
     m_uncalibratedClusterCollectionName(""),
+    m_forceClusterEnergyComparisonToHadronic(false),
     m_pfoCollectionName(""),
     m_startVertexCollectionName(""),
     m_startVertexAlgName(""),

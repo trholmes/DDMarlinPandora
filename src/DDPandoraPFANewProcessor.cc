@@ -496,6 +496,11 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
                              m_pfoCreatorSettings.m_uncalibratedClusterCollectionName,
                              std::string(""));
 
+    registerProcessorParameter("ForceClusterEnergyComparisonToHadronic",
+                            "Force calibrated/uncalibrated cluster comparison output to use hadronic energies regardless of final PID",
+                            m_pfoCreatorSettings.m_forceClusterEnergyComparisonToHadronic,
+                            bool(false));
+
     registerOutputCollection(LCIO::RECONSTRUCTEDPARTICLE,
                              "PFOCollectionName",
                              "PFO Collection Name",

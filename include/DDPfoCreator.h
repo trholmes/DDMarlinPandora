@@ -28,6 +28,7 @@ public:
 
         std::string     m_clusterCollectionName = "";            ///< The name of the cluster output collection
         std::string     m_uncalibratedClusterCollectionName = "";///< Optional name of additional uncalibrated cluster output collection
+        bool            m_forceClusterEnergyComparisonToHadronic = false; ///< Force cluster comparison output to use hadronic energies regardless of PID
         std::string     m_pfoCollectionName = "";                ///< The name of the pfo output collection
         std::string     m_startVertexCollectionName = "";        ///< The name of the start vertex output collection
         std::string     m_startVertexAlgName = "";               ///< The name of the algorithm to fill the start vertex output collection
