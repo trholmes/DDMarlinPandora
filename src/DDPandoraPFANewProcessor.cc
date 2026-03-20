@@ -363,6 +363,17 @@ pandora::StatusCode DDPandoraPFANewProcessor::RegisterUserComponents() const
     {
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterThetaEnergyBinnedEnergyCorrection(*m_pPandora,
             m_settings.m_thetaEnergyCorrectionPluginName,
+            pandora::HADRONIC,
+            m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_eCalThetaEnergyCorrectionScaleFactors,
+            m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hCalThetaEnergyCorrectionScaleFactors));
+
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterThetaEnergyBinnedEnergyCorrection(*m_pPandora,
+            m_settings.m_thetaEnergyCorrectionPluginName,
+            pandora::ELECTROMAGNETIC,
             m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
             m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
             m_settings.m_eCalThetaEnergyCorrectionScaleFactors,
