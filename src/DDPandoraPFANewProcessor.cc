@@ -31,6 +31,47 @@
 
 
 #include <cstdlib>
+#include <stdexcept>
+
+namespace
+{
+bool IsStrictlyIncreasing(const pandora::FloatVector &values)
+{
+    if (values.empty())
+        return true;
+
+    for (std::size_t i = 1; i < values.size(); ++i)
+    {
+        if (!(values.at(i) > values.at(i - 1)))
+            return false;
+    }
+
+    return true;
+}
+
+void ValidateThetaEnergyTable(const std::string &name, const pandora::FloatVector &thetaEdges,
+    const pandora::FloatVector &energyEdges, const pandora::FloatVector &scaleFactors)
+{
+    if (thetaEdges.size() < 2)
+        throw std::runtime_error(name + ": require at least 2 theta bin edges");
+
+    if (energyEdges.size() < 2)
+        throw std::runtime_error(name + ": require at least 2 energy bin edges");
+
+    if (!IsStrictlyIncreasing(thetaEdges))
+        throw std::runtime_error(name + ": theta bin edges must be strictly increasing");
+
+    if (!IsStrictlyIncreasing(energyEdges))
+        throw std::runtime_error(name + ": energy bin edges must be strictly increasing");
+
+    const std::size_t expectedScaleCount = (thetaEdges.size() - 1) * (energyEdges.size() - 1);
+    if (scaleFactors.size() != expectedScaleCount)
+    {
+        throw std::runtime_error(name + ": scale factor size mismatch, expected " +
+            std::to_string(expectedScaleCount) + ", got " + std::to_string(scaleFactors.size()));
+    }
+}
+} // namespace
 
 DDPandoraPFANewProcessor aDDPandoraPFANewProcessor;
 
@@ -312,6 +353,32 @@ pandora::StatusCode DDPandoraPFANewProcessor::RegisterUserComponents() const
 
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
         "NonLinearity", pandora::HADRONIC, m_settings.m_inputEnergyCorrectionPoints, m_settings.m_outputEnergyCorrectionPoints));
+
+    if (m_settings.m_hadronicThetaEnergyCorrectionEnabled)
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterThetaEnergyBinnedEnergyCorrection(*m_pPandora,
+            m_settings.m_hadronicThetaEnergyCorrectionPluginName,
+            pandora::HADRONIC,
+            m_settings.m_hadronicECalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_hadronicECalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hadronicECalThetaEnergyCorrectionScaleFactors,
+            m_settings.m_hadronicHCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hadronicHCalThetaEnergyCorrectionScaleFactors));
+    }
+
+    if (m_settings.m_electromagneticThetaEnergyCorrectionEnabled)
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterThetaEnergyBinnedEnergyCorrection(*m_pPandora,
+            m_settings.m_electromagneticThetaEnergyCorrectionPluginName,
+            pandora::ELECTROMAGNETIC,
+            m_settings.m_electromagneticECalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_electromagneticECalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_electromagneticECalThetaEnergyCorrectionScaleFactors,
+            m_settings.m_electromagneticHCalThetaEnergyCorrectionThetaBinEdges,
+            m_settings.m_electromagneticHCalThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_electromagneticHCalThetaEnergyCorrectionScaleFactors));
+    }
 
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::RegisterAlgorithmFactory(*m_pPandora,
         "ExternalClustering", new DDExternalClusteringAlgorithm::Factory));
@@ -794,6 +861,126 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
                             "The output energy points for hadronic energy correction",
                             m_settings.m_outputEnergyCorrectionPoints,
                             FloatVector());
+
+    registerProcessorParameter("ThetaEnergyCorrectionEnabled",
+                            "Enable legacy hadronic-only theta-energy correction payload",
+                            m_settings.m_thetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("ThetaEnergyCorrectionPluginName",
+                            "Legacy theta-energy correction plugin name",
+                            m_settings.m_thetaEnergyCorrectionPluginName,
+                            std::string(""));
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionThetaBinEdges",
+                            "Legacy ECAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionEnergyBinEdges",
+                            "Legacy ECAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ECalThetaEnergyCorrectionScaleFactors",
+                            "Legacy ECAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_eCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionThetaBinEdges",
+                            "Legacy HCAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionEnergyBinEdges",
+                            "Legacy HCAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HCalThetaEnergyCorrectionScaleFactors",
+                            "Legacy HCAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_hCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionEnabled",
+                            "Enable branch-specific theta-energy correction on the hadronic branch",
+                            m_settings.m_hadronicThetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionPluginName",
+                            "Hadronic branch theta-energy correction plugin name",
+                            m_settings.m_hadronicThetaEnergyCorrectionPluginName,
+                            std::string(""));
+
+    registerProcessorParameter("HadronicECalThetaEnergyCorrectionThetaBinEdges",
+                            "Hadronic branch ECAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_hadronicECalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicECalThetaEnergyCorrectionEnergyBinEdges",
+                            "Hadronic branch ECAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_hadronicECalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicECalThetaEnergyCorrectionScaleFactors",
+                            "Hadronic branch ECAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_hadronicECalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicHCalThetaEnergyCorrectionThetaBinEdges",
+                            "Hadronic branch HCAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_hadronicHCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicHCalThetaEnergyCorrectionEnergyBinEdges",
+                            "Hadronic branch HCAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicHCalThetaEnergyCorrectionScaleFactors",
+                            "Hadronic branch HCAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_hadronicHCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionEnabled",
+                            "Enable branch-specific theta-energy correction on the electromagnetic branch",
+                            m_settings.m_electromagneticThetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionPluginName",
+                            "Electromagnetic branch theta-energy correction plugin name",
+                            m_settings.m_electromagneticThetaEnergyCorrectionPluginName,
+                            std::string(""));
+
+    registerProcessorParameter("ElectromagneticECalThetaEnergyCorrectionThetaBinEdges",
+                            "Electromagnetic branch ECAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_electromagneticECalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticECalThetaEnergyCorrectionEnergyBinEdges",
+                            "Electromagnetic branch ECAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_electromagneticECalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticECalThetaEnergyCorrectionScaleFactors",
+                            "Electromagnetic branch ECAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_electromagneticECalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticHCalThetaEnergyCorrectionThetaBinEdges",
+                            "Electromagnetic branch HCAL theta bin edges for theta-energy correction (radians)",
+                            m_settings.m_electromagneticHCalThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticHCalThetaEnergyCorrectionEnergyBinEdges",
+                            "Electromagnetic branch HCAL energy bin edges for theta-energy correction (GeV)",
+                            m_settings.m_electromagneticHCalThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticHCalThetaEnergyCorrectionScaleFactors",
+                            "Electromagnetic branch HCAL flattened theta-energy correction scale factors (row-major theta x energy)",
+                            m_settings.m_electromagneticHCalThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
     
     
     ///EXTRA PARAMETERS FROM NIKIFOROS
@@ -920,6 +1107,67 @@ void DDPandoraPFANewProcessor::FinaliseSteeringParameters()
     mainDetector.field().magneticField(position,magneticFieldVector); // get the magnetic field vector from DD4hep
     
     m_settings.m_innerBField = magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
+
+    if (m_settings.m_thetaEnergyCorrectionEnabled && !m_settings.m_hadronicThetaEnergyCorrectionEnabled)
+    {
+        m_settings.m_hadronicThetaEnergyCorrectionEnabled = true;
+        m_settings.m_hadronicThetaEnergyCorrectionPluginName = m_settings.m_thetaEnergyCorrectionPluginName;
+        m_settings.m_hadronicECalThetaEnergyCorrectionThetaBinEdges = m_settings.m_eCalThetaEnergyCorrectionThetaBinEdges;
+        m_settings.m_hadronicECalThetaEnergyCorrectionEnergyBinEdges = m_settings.m_eCalThetaEnergyCorrectionEnergyBinEdges;
+        m_settings.m_hadronicECalThetaEnergyCorrectionScaleFactors = m_settings.m_eCalThetaEnergyCorrectionScaleFactors;
+        m_settings.m_hadronicHCalThetaEnergyCorrectionThetaBinEdges = m_settings.m_hCalThetaEnergyCorrectionThetaBinEdges;
+        m_settings.m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges = m_settings.m_hCalThetaEnergyCorrectionEnergyBinEdges;
+        m_settings.m_hadronicHCalThetaEnergyCorrectionScaleFactors = m_settings.m_hCalThetaEnergyCorrectionScaleFactors;
+        streamlog_out(MESSAGE) << "DDPandoraPFANewProcessor: legacy theta-energy payload mapped to hadronic branch" << std::endl;
+    }
+
+    auto validateBranch = [&](const std::string &branchName,
+                              const bool enabled,
+                              const std::string &pluginName,
+                              const FloatVector &ecalThetaEdges,
+                              const FloatVector &ecalEnergyEdges,
+                              const FloatVector &ecalScaleFactors,
+                              const FloatVector &hcalThetaEdges,
+                              const FloatVector &hcalEnergyEdges,
+                              const FloatVector &hcalScaleFactors)
+    {
+        if (!enabled)
+            return;
+
+        if (pluginName.empty())
+            throw std::runtime_error(branchName + "ThetaEnergyCorrectionEnabled=true but plugin name is empty");
+
+        ValidateThetaEnergyTable(branchName + "ECalThetaEnergyCorrection", ecalThetaEdges, ecalEnergyEdges, ecalScaleFactors);
+        ValidateThetaEnergyTable(branchName + "HCalThetaEnergyCorrection", hcalThetaEdges, hcalEnergyEdges, hcalScaleFactors);
+
+        streamlog_out(MESSAGE) << "DDPandoraPFANewProcessor: loaded " << branchName
+                               << " theta-energy correction tables for plugin '" << pluginName << "'"
+                               << " (ECAL bins: " << (ecalThetaEdges.size() - 1) << "x" << (ecalEnergyEdges.size() - 1)
+                               << ", HCAL bins: " << (hcalThetaEdges.size() - 1) << "x" << (hcalEnergyEdges.size() - 1)
+                               << ")" << std::endl;
+    };
+
+    validateBranch(
+        "Hadronic",
+        m_settings.m_hadronicThetaEnergyCorrectionEnabled,
+        m_settings.m_hadronicThetaEnergyCorrectionPluginName,
+        m_settings.m_hadronicECalThetaEnergyCorrectionThetaBinEdges,
+        m_settings.m_hadronicECalThetaEnergyCorrectionEnergyBinEdges,
+        m_settings.m_hadronicECalThetaEnergyCorrectionScaleFactors,
+        m_settings.m_hadronicHCalThetaEnergyCorrectionThetaBinEdges,
+        m_settings.m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges,
+        m_settings.m_hadronicHCalThetaEnergyCorrectionScaleFactors);
+
+    validateBranch(
+        "Electromagnetic",
+        m_settings.m_electromagneticThetaEnergyCorrectionEnabled,
+        m_settings.m_electromagneticThetaEnergyCorrectionPluginName,
+        m_settings.m_electromagneticECalThetaEnergyCorrectionThetaBinEdges,
+        m_settings.m_electromagneticECalThetaEnergyCorrectionEnergyBinEdges,
+        m_settings.m_electromagneticECalThetaEnergyCorrectionScaleFactors,
+        m_settings.m_electromagneticHCalThetaEnergyCorrectionThetaBinEdges,
+        m_settings.m_electromagneticHCalThetaEnergyCorrectionEnergyBinEdges,
+        m_settings.m_electromagneticHCalThetaEnergyCorrectionScaleFactors);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

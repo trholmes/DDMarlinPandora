@@ -54,6 +54,30 @@ public:
 
         FloatVector     m_inputEnergyCorrectionPoints{};    ///< The input energy points for non-linearity energy correction
         FloatVector     m_outputEnergyCorrectionPoints{};   ///< The output energy points for non-linearity energy correction
+        bool            m_thetaEnergyCorrectionEnabled = false;           ///< Legacy hadronic-only theta-energy correction switch
+        std::string     m_thetaEnergyCorrectionPluginName = "";           ///< Legacy theta-energy correction plugin name
+        FloatVector     m_eCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_eCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_eCalThetaEnergyCorrectionScaleFactors{};
+        FloatVector     m_hCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_hCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_hCalThetaEnergyCorrectionScaleFactors{};
+        bool            m_hadronicThetaEnergyCorrectionEnabled = false;   ///< Branch-specific hadronic residual correction switch
+        std::string     m_hadronicThetaEnergyCorrectionPluginName = "";
+        FloatVector     m_hadronicECalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_hadronicECalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_hadronicECalThetaEnergyCorrectionScaleFactors{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionScaleFactors{};
+        bool            m_electromagneticThetaEnergyCorrectionEnabled = false; ///< Branch-specific EM residual correction switch
+        std::string     m_electromagneticThetaEnergyCorrectionPluginName = "";
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionScaleFactors{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionScaleFactors{};
         
         // Software compensation parameters
         FloatVector     m_softCompParameters{};
