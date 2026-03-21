@@ -13,6 +13,7 @@
 #include "Api/PandoraApi.h"
 
 #include "LCContent.h"
+#include "LCPlugins/LCEnergyCorrectionPlugins.h"
 #include "LCPlugins/LCSoftwareCompensation.h"
 
 #include "DDExternalClusteringAlgorithm.h"
@@ -255,6 +256,7 @@ void DDPandoraPFANewProcessor::processEvent(LCEvent *pLCEvent)
     try
     {
         streamlog_out(DEBUG) << "DDPandoraPFANewProcessor - Run " << std::endl;
+        lc_content::LCEnergyCorrectionPlugins::ThetaEnergyBinned::ResetLegacyEnergySnapshots();
         (void) m_pandoraToLCEventMap.insert(PandoraToLCEventMap::value_type(m_pPandora, pLCEvent));
 
         PANDORA_THROW_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, m_pDDMCParticleCreator->CreateMCParticles(pLCEvent));
@@ -500,9 +502,15 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
     // Name of PFO collection written by MarlinPandora
     registerOutputCollection(LCIO::CLUSTER,
                              "ClusterCollectionName",
-                             "Calibrated cluster collection name",
+                             "Standard cluster collection name",
                              m_pfoCreatorSettings.m_clusterCollectionName,
                              std::string("PandoraPFANewClusters"));
+
+    registerOutputCollection(LCIO::CLUSTER,
+                             "CalibratedComparisonClusterCollectionName",
+                             "Optional calibrated comparison cluster collection name (empty disables output)",
+                             m_pfoCreatorSettings.m_calibratedComparisonClusterCollectionName,
+                             std::string(""));
 
     registerOutputCollection(LCIO::CLUSTER,
                              "UncalibratedClusterCollectionName",

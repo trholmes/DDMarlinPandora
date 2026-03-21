@@ -25,6 +25,8 @@
 
 #include "Api/PandoraApi.h"
 
+#include "LCPlugins/LCEnergyCorrectionPlugins.h"
+
 #include "Objects/Cluster.h"
 #include "Objects/ParticleFlowObject.h"
 #include "Objects/Track.h"
@@ -53,16 +55,25 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
     const pandora::PfoList *pPandoraPfoList = NULL;
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(m_pandora, pPandoraPfoList));
 
+    const bool writeCalibratedComparisonClusters(!m_settings.m_calibratedComparisonClusterCollectionName.empty());
     const bool writeUncalibratedClusters(!m_settings.m_uncalibratedClusterCollectionName.empty());
 
-    IMPL::LCCollectionVec *pCalibratedClusterCollection = new IMPL::LCCollectionVec(LCIO::CLUSTER);
+    IMPL::LCCollectionVec *pClusterCollection = new IMPL::LCCollectionVec(LCIO::CLUSTER);
+    IMPL::LCCollectionVec *pCalibratedComparisonClusterCollection = writeCalibratedComparisonClusters ? new IMPL::LCCollectionVec(LCIO::CLUSTER) : NULL;
     IMPL::LCCollectionVec *pUncalibratedClusterCollection = writeUncalibratedClusters ? new IMPL::LCCollectionVec(LCIO::CLUSTER) : NULL;
     IMPL::LCCollectionVec *pReconstructedParticleCollection = new IMPL::LCCollectionVec(LCIO::RECONSTRUCTEDPARTICLE);
     IMPL::LCCollectionVec *pStartVertexCollection = new IMPL::LCCollectionVec(LCIO::VERTEX);
 
-    IMPL::LCFlagImpl lcFlagImpl(pCalibratedClusterCollection->getFlag());
+    IMPL::LCFlagImpl lcFlagImpl(pClusterCollection->getFlag());
     lcFlagImpl.setBit(LCIO::CLBIT_HITS);
-    pCalibratedClusterCollection->setFlag(lcFlagImpl.getFlag());
+    pClusterCollection->setFlag(lcFlagImpl.getFlag());
+
+    if (writeCalibratedComparisonClusters)
+    {
+        IMPL::LCFlagImpl calibratedLcFlagImpl(pCalibratedComparisonClusterCollection->getFlag());
+        calibratedLcFlagImpl.setBit(LCIO::CLBIT_HITS);
+        pCalibratedComparisonClusterCollection->setFlag(calibratedLcFlagImpl.getFlag());
+    }
 
     if (writeUncalibratedClusters)
     {
@@ -73,7 +84,9 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
 
     pandora::StringVector subDetectorNames;
     this->InitialiseSubDetectorNames(subDetectorNames);
-    pCalibratedClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
+    pClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
+    if (writeCalibratedComparisonClusters)
+        pCalibratedComparisonClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
     if (writeUncalibratedClusters)
         pUncalibratedClusterCollection->parameters().setValues("ClusterSubdetectorNames", subDetectorNames);
 
@@ -95,21 +108,39 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
             pPandoraCluster->GetOrderedCaloHitList().FillCaloHitList(pandoraCaloHitList);
             pandoraCaloHitList.insert(pandoraCaloHitList.end(), pPandoraCluster->GetIsolatedCaloHitList().begin(), pPandoraCluster->GetIsolatedCaloHitList().end());
 
-            pandora::FloatVector hitECal, hitXCal, hitYCal, hitZCal;
-            IMPL::ClusterImpl *const pLcioCalibratedCluster(new ClusterImpl());
-            this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioCalibratedCluster, pandoraCaloHitList, hitECal, hitXCal, hitYCal, hitZCal);
+            pandora::FloatVector hitEStandard, hitXStandard, hitYStandard, hitZStandard;
+            IMPL::ClusterImpl *const pLcioCluster(new ClusterImpl());
+            this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioCluster, pandoraCaloHitList, hitEStandard, hitXStandard, hitYStandard, hitZStandard);
 
-            float clusterCalibratedEnergy(0.f);
-            this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioCalibratedCluster, clusterCalibratedEnergy, true);
+            float clusterEnergy(0.f);
+            this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioCluster, clusterEnergy, ClusterEnergyMode::LEGACY_CORRECTED);
 
             pandora::CartesianVector clusterPosition(0.f, 0.f, 0.f);
             const unsigned int nHitsInCluster(pandoraCaloHitList.size());
-            this->SetClusterPositionAndError(nHitsInCluster, hitECal, hitXCal, hitYCal, hitZCal, pLcioCalibratedCluster, clusterPosition);
+            this->SetClusterPositionAndError(nHitsInCluster, hitEStandard, hitXStandard, hitYStandard, hitZStandard, pLcioCluster, clusterPosition);
 
             if (!hasTrack)
             {
-                clustersWeightedPosition += clusterPosition * clusterCalibratedEnergy;
-                clustersTotalEnergy += clusterCalibratedEnergy;
+                clustersWeightedPosition += clusterPosition * clusterEnergy;
+                clustersTotalEnergy += clusterEnergy;
+            }
+
+            if (writeCalibratedComparisonClusters)
+            {
+                pandora::FloatVector hitECalibrated, hitXCalibrated, hitYCalibrated, hitZCalibrated;
+                IMPL::ClusterImpl *const pLcioCalibratedCluster(new ClusterImpl());
+                this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioCalibratedCluster, pandoraCaloHitList,
+                    hitECalibrated, hitXCalibrated, hitYCalibrated, hitZCalibrated);
+
+                float clusterCalibratedEnergy(0.f);
+                this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioCalibratedCluster,
+                    clusterCalibratedEnergy, ClusterEnergyMode::CURRENT_CORRECTED);
+
+                pandora::CartesianVector calibratedClusterPosition(0.f, 0.f, 0.f);
+                this->SetClusterPositionAndError(nHitsInCluster, hitECalibrated, hitXCalibrated, hitYCalibrated, hitZCalibrated,
+                    pLcioCalibratedCluster, calibratedClusterPosition);
+
+                pCalibratedComparisonClusterCollection->addElement(pLcioCalibratedCluster);
             }
 
             if (writeUncalibratedClusters)
@@ -119,7 +150,7 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
                 this->SetClusterSubDetectorEnergies(subDetectorNames, pLcioUncalibratedCluster, pandoraCaloHitList, hitERaw, hitXRaw, hitYRaw, hitZRaw);
 
                 float clusterUncalibratedEnergy(0.f);
-                this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioUncalibratedCluster, clusterUncalibratedEnergy, false);
+                this->SetClusterEnergyAndError(pPandoraPfo, pPandoraCluster, pLcioUncalibratedCluster, clusterUncalibratedEnergy, ClusterEnergyMode::RAW);
 
                 pandora::CartesianVector rawClusterPosition(0.f, 0.f, 0.f);
                 this->SetClusterPositionAndError(nHitsInCluster, hitERaw, hitXRaw, hitYRaw, hitZRaw, pLcioUncalibratedCluster, rawClusterPosition);
@@ -127,8 +158,8 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
                 pUncalibratedClusterCollection->addElement(pLcioUncalibratedCluster);
             }
 
-            pCalibratedClusterCollection->addElement(pLcioCalibratedCluster);
-            pReconstructedParticle->addCluster(pLcioCalibratedCluster);
+            pClusterCollection->addElement(pLcioCluster);
+            pReconstructedParticle->addCluster(pLcioCluster);
         }
 
         if (!hasTrack)
@@ -160,7 +191,9 @@ pandora::StatusCode DDPfoCreator::CreateParticleFlowObjects(EVENT::LCEvent *pLCE
         pStartVertexCollection->addElement(pStartVertex);
     }
 
-    pLCEvent->addCollection(pCalibratedClusterCollection, m_settings.m_clusterCollectionName.c_str());
+    pLCEvent->addCollection(pClusterCollection, m_settings.m_clusterCollectionName.c_str());
+    if (writeCalibratedComparisonClusters)
+        pLCEvent->addCollection(pCalibratedComparisonClusterCollection, m_settings.m_calibratedComparisonClusterCollectionName.c_str());
     if (writeUncalibratedClusters)
         pLCEvent->addCollection(pUncalibratedClusterCollection, m_settings.m_uncalibratedClusterCollectionName.c_str());
     pLCEvent->addCollection(pReconstructedParticleCollection, m_settings.m_pfoCollectionName.c_str());
@@ -218,13 +251,26 @@ void DDPfoCreator::SetClusterSubDetectorEnergies(const pandora::StringVector &su
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void DDPfoCreator::SetClusterEnergyAndError(const pandora::ParticleFlowObject *const pPandoraPfo, const pandora::Cluster *const pPandoraCluster,
-    IMPL::ClusterImpl *const pLcioCluster, float &clusterEnergy, const bool useCorrectedEnergy) const
+    IMPL::ClusterImpl *const pLcioCluster, float &clusterEnergy, const ClusterEnergyMode energyMode) const
 {
     const bool isEmShower((pandora::PHOTON == pPandoraPfo->GetParticleId()) || (pandora::E_MINUS == std::abs(pPandoraPfo->GetParticleId())));
     const bool forceHadronicComparison(m_settings.m_forceClusterEnergyComparisonToHadronic &&
         !m_settings.m_uncalibratedClusterCollectionName.empty());
 
-    if (useCorrectedEnergy)
+    if (ClusterEnergyMode::LEGACY_CORRECTED == energyMode)
+    {
+        const pandora::EnergyCorrectionType energyCorrectionType(
+            (forceHadronicComparison || !isEmShower) ? pandora::HADRONIC : pandora::ELECTROMAGNETIC);
+
+        if (!lc_content::LCEnergyCorrectionPlugins::ThetaEnergyBinned::GetLegacyEnergySnapshot(
+                pPandoraCluster, energyCorrectionType, clusterEnergy))
+        {
+            clusterEnergy = (pandora::ELECTROMAGNETIC == energyCorrectionType) ?
+                pPandoraCluster->GetCorrectedElectromagneticEnergy(m_pandora) :
+                pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora);
+        }
+    }
+    else if (ClusterEnergyMode::CURRENT_CORRECTED == energyMode)
     {
         clusterEnergy = (forceHadronicComparison ?
             pPandoraCluster->GetCorrectedHadronicEnergy(m_pandora) :
@@ -462,6 +508,7 @@ void DDPfoCreator::SetRecoParticlePropertiesFromPFO(const pandora::ParticleFlowO
 
 DDPfoCreator::Settings::Settings():
     m_clusterCollectionName(""),
+    m_calibratedComparisonClusterCollectionName(""),
     m_uncalibratedClusterCollectionName(""),
     m_forceClusterEnergyComparisonToHadronic(false),
     m_pfoCollectionName(""),
