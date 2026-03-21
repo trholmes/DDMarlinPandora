@@ -63,6 +63,22 @@ public:
         FloatVector     m_hCalThetaEnergyCorrectionThetaBinEdges{};       ///< HCAL theta bin edges
         FloatVector     m_hCalThetaEnergyCorrectionEnergyBinEdges{};      ///< HCAL energy bin edges
         FloatVector     m_hCalThetaEnergyCorrectionScaleFactors{};        ///< Flattened HCAL scale factors (row-major theta x energy)
+        bool            m_hadronicThetaEnergyCorrectionEnabled = false;   ///< Enable theta-energy correction on the hadronic branch
+        std::string     m_hadronicThetaEnergyCorrectionPluginName = "";   ///< Hadronic branch correction plugin name
+        FloatVector     m_hadronicECalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_hadronicECalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_hadronicECalThetaEnergyCorrectionScaleFactors{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_hadronicHCalThetaEnergyCorrectionScaleFactors{};
+        bool            m_electromagneticThetaEnergyCorrectionEnabled = false; ///< Enable theta-energy correction on the EM branch
+        std::string     m_electromagneticThetaEnergyCorrectionPluginName = ""; ///< Electromagnetic branch correction plugin name
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_electromagneticECalThetaEnergyCorrectionScaleFactors{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionThetaBinEdges{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionEnergyBinEdges{};
+        FloatVector     m_electromagneticHCalThetaEnergyCorrectionScaleFactors{};
         
         // Software compensation parameters
         FloatVector     m_softCompParameters{};
