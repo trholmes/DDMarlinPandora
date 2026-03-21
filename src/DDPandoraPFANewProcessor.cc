@@ -32,6 +32,43 @@
 
 #include <cstdlib>
 
+namespace
+{
+
+bool IsStrictlyIncreasing(const DDPandoraPFANewProcessor::FloatVector &values)
+{
+    if (values.size() < 2)
+        return false;
+
+    for (unsigned int i = 1; i < values.size(); ++i)
+    {
+        if (values.at(i) <= values.at(i - 1))
+            return false;
+    }
+
+    return true;
+}
+
+void ValidateThetaEnergyCorrectionSettings(const DDPandoraPFANewProcessor::Settings &settings)
+{
+    if (!settings.m_electromagneticThetaEnergyCorrectionEnabled)
+        return;
+
+    if (!IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges) ||
+        !IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges))
+    {
+        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+    }
+
+    const unsigned int nThetaBins(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges.size() - 1);
+    const unsigned int nEnergyBins(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges.size() - 1);
+
+    if (nThetaBins * nEnergyBins != settings.m_electromagneticThetaEnergyCorrectionScaleFactors.size())
+        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+}
+
+} // namespace
+
 DDPandoraPFANewProcessor aDDPandoraPFANewProcessor;
 
 double getFieldFromCompact(){
@@ -312,6 +349,19 @@ pandora::StatusCode DDPandoraPFANewProcessor::RegisterUserComponents() const
 
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
         "NonLinearity", pandora::HADRONIC, m_settings.m_inputEnergyCorrectionPoints, m_settings.m_outputEnergyCorrectionPoints));
+
+    if (m_settings.m_electromagneticThetaEnergyCorrectionEnabled)
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
+            m_settings.m_electromagneticThetaEnergyCorrectionPluginName, pandora::ELECTROMAGNETIC,
+            m_settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges, m_settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_electromagneticThetaEnergyCorrectionScaleFactors));
+    }
+    else
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
+            m_settings.m_electromagneticThetaEnergyCorrectionPluginName, pandora::ELECTROMAGNETIC, FloatVector(), FloatVector()));
+    }
 
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::RegisterAlgorithmFactory(*m_pPandora,
         "ExternalClustering", new DDExternalClusteringAlgorithm::Factory));
@@ -794,6 +844,31 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
                             "The output energy points for hadronic energy correction",
                             m_settings.m_outputEnergyCorrectionPoints,
                             FloatVector());
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionEnabled",
+                            "Whether to enable theta-energy correction on the Pandora EM branch",
+                            m_settings.m_electromagneticThetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionPluginName",
+                            "The name of the Pandora EM theta-energy correction plugin",
+                            m_settings.m_electromagneticThetaEnergyCorrectionPluginName,
+                            std::string("PhotonEMNonLinearity"));
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionThetaBinEdges",
+                            "The theta bin edges for Pandora EM theta-energy correction",
+                            m_settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionEnergyBinEdges",
+                            "The energy bin edges for Pandora EM theta-energy correction",
+                            m_settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("ElectromagneticThetaEnergyCorrectionScaleFactors",
+                            "The row-major theta-energy scale factors for Pandora EM theta-energy correction",
+                            m_settings.m_electromagneticThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
     
     
     ///EXTRA PARAMETERS FROM NIKIFOROS
@@ -862,6 +937,8 @@ void DDPandoraPFANewProcessor::FinaliseSteeringParameters()
 {
     // ATTN: This function seems to be necessary for operations that cannot easily be performed at construction of the processor,
     // when the steering file is parsed e.g. the call to GEAR to get the inner bfield
+    ValidateThetaEnergyCorrectionSettings(m_settings);
+
     m_trackCreatorSettings.m_prongSplitVertexCollections = m_trackCreatorSettings.m_prongVertexCollections;
     m_trackCreatorSettings.m_prongSplitVertexCollections.insert(m_trackCreatorSettings.m_prongSplitVertexCollections.end(),m_trackCreatorSettings.m_splitVertexCollections.begin(),m_trackCreatorSettings.m_splitVertexCollections.end());
     

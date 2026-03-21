@@ -54,6 +54,11 @@ public:
 
         FloatVector     m_inputEnergyCorrectionPoints{};    ///< The input energy points for non-linearity energy correction
         FloatVector     m_outputEnergyCorrectionPoints{};   ///< The output energy points for non-linearity energy correction
+        bool            m_electromagneticThetaEnergyCorrectionEnabled = false; ///< Whether to enable EM theta-energy correction
+        std::string     m_electromagneticThetaEnergyCorrectionPluginName = "PhotonEMNonLinearity"; ///< EM correction plugin name
+        FloatVector     m_electromagneticThetaEnergyCorrectionThetaBinEdges{}; ///< The theta bin edges for EM correction
+        FloatVector     m_electromagneticThetaEnergyCorrectionEnergyBinEdges{}; ///< The energy bin edges for EM correction
+        FloatVector     m_electromagneticThetaEnergyCorrectionScaleFactors{}; ///< The scale factors for EM correction
         
         // Software compensation parameters
         FloatVector     m_softCompParameters{};
