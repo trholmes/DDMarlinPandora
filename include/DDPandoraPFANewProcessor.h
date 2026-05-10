@@ -59,6 +59,11 @@ public:
         FloatVector     m_electromagneticThetaEnergyCorrectionThetaBinEdges{}; ///< The theta bin edges for EM correction
         FloatVector     m_electromagneticThetaEnergyCorrectionEnergyBinEdges{}; ///< The energy bin edges for EM correction
         FloatVector     m_electromagneticThetaEnergyCorrectionScaleFactors{}; ///< The scale factors for EM correction
+        bool            m_hadronicThetaEnergyCorrectionEnabled = false; ///< Whether to enable HAD theta-energy correction
+        std::string     m_hadronicThetaEnergyCorrectionPluginName = "HadronicThetaEnergyBinned"; ///< HAD correction plugin name
+        FloatVector     m_hadronicThetaEnergyCorrectionThetaBinEdges{}; ///< The theta bin edges for HAD correction
+        FloatVector     m_hadronicThetaEnergyCorrectionEnergyBinEdges{}; ///< The energy bin edges for HAD correction
+        FloatVector     m_hadronicThetaEnergyCorrectionScaleFactors{}; ///< The scale factors for HAD correction
         
         // Software compensation parameters
         FloatVector     m_softCompParameters{};

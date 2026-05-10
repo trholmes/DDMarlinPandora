@@ -51,20 +51,35 @@ bool IsStrictlyIncreasing(const DDPandoraPFANewProcessor::FloatVector &values)
 
 void ValidateThetaEnergyCorrectionSettings(const DDPandoraPFANewProcessor::Settings &settings)
 {
-    if (!settings.m_electromagneticThetaEnergyCorrectionEnabled)
-        return;
-
-    if (!IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges) ||
-        !IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges))
+    if (settings.m_electromagneticThetaEnergyCorrectionEnabled)
     {
-        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+        if (!IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges) ||
+            !IsStrictlyIncreasing(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges))
+        {
+            throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+        }
+
+        const unsigned int nThetaBins(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges.size() - 1);
+        const unsigned int nEnergyBins(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges.size() - 1);
+
+        if (nThetaBins * nEnergyBins != settings.m_electromagneticThetaEnergyCorrectionScaleFactors.size())
+            throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
     }
 
-    const unsigned int nThetaBins(settings.m_electromagneticThetaEnergyCorrectionThetaBinEdges.size() - 1);
-    const unsigned int nEnergyBins(settings.m_electromagneticThetaEnergyCorrectionEnergyBinEdges.size() - 1);
+    if (settings.m_hadronicThetaEnergyCorrectionEnabled)
+    {
+        if (!IsStrictlyIncreasing(settings.m_hadronicThetaEnergyCorrectionThetaBinEdges) ||
+            !IsStrictlyIncreasing(settings.m_hadronicThetaEnergyCorrectionEnergyBinEdges))
+        {
+            throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+        }
 
-    if (nThetaBins * nEnergyBins != settings.m_electromagneticThetaEnergyCorrectionScaleFactors.size())
-        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+        const unsigned int nThetaBins(settings.m_hadronicThetaEnergyCorrectionThetaBinEdges.size() - 1);
+        const unsigned int nEnergyBins(settings.m_hadronicThetaEnergyCorrectionEnergyBinEdges.size() - 1);
+
+        if (nThetaBins * nEnergyBins != settings.m_hadronicThetaEnergyCorrectionScaleFactors.size())
+            throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+    }
 }
 
 } // namespace
@@ -361,6 +376,19 @@ pandora::StatusCode DDPandoraPFANewProcessor::RegisterUserComponents() const
     {
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
             m_settings.m_electromagneticThetaEnergyCorrectionPluginName, pandora::ELECTROMAGNETIC, FloatVector(), FloatVector()));
+    }
+
+    if (m_settings.m_hadronicThetaEnergyCorrectionEnabled)
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
+            m_settings.m_hadronicThetaEnergyCorrectionPluginName, pandora::HADRONIC,
+            m_settings.m_hadronicThetaEnergyCorrectionThetaBinEdges, m_settings.m_hadronicThetaEnergyCorrectionEnergyBinEdges,
+            m_settings.m_hadronicThetaEnergyCorrectionScaleFactors));
+    }
+    else
+    {
+        PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, LCContent::RegisterNonLinearityEnergyCorrection(*m_pPandora,
+            m_settings.m_hadronicThetaEnergyCorrectionPluginName, pandora::HADRONIC, FloatVector(), FloatVector()));
     }
 
     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, PandoraApi::RegisterAlgorithmFactory(*m_pPandora,
@@ -868,6 +896,31 @@ void DDPandoraPFANewProcessor::ProcessSteeringFile()
     registerProcessorParameter("ElectromagneticThetaEnergyCorrectionScaleFactors",
                             "The row-major theta-energy scale factors for Pandora EM theta-energy correction",
                             m_settings.m_electromagneticThetaEnergyCorrectionScaleFactors,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionEnabled",
+                            "Whether to enable theta-energy correction on the Pandora HAD branch",
+                            m_settings.m_hadronicThetaEnergyCorrectionEnabled,
+                            bool(false));
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionPluginName",
+                            "The name of the Pandora HAD theta-energy correction plugin",
+                            m_settings.m_hadronicThetaEnergyCorrectionPluginName,
+                            std::string("HadronicThetaEnergyBinned"));
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionThetaBinEdges",
+                            "The theta bin edges for Pandora HAD theta-energy correction",
+                            m_settings.m_hadronicThetaEnergyCorrectionThetaBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionEnergyBinEdges",
+                            "The energy bin edges for Pandora HAD theta-energy correction",
+                            m_settings.m_hadronicThetaEnergyCorrectionEnergyBinEdges,
+                            FloatVector());
+
+    registerProcessorParameter("HadronicThetaEnergyCorrectionScaleFactors",
+                            "The row-major theta-energy scale factors for Pandora HAD theta-energy correction",
+                            m_settings.m_hadronicThetaEnergyCorrectionScaleFactors,
                             FloatVector());
     
     
